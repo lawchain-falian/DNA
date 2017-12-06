@@ -163,17 +163,15 @@ func GenesisBlockInit(defaultBookKeeper []*crypto.PubKey) (*Block, error) {
 		ConsensusData:    GenesisNonce,
 		NextBookKeeper:   nextBookKeeper,
 		Program: &program.Program{
-			Code:      []byte{},
+			Code:      []byte{'0'},
 			Parameter: []byte{byte(vm.PUSHT)},
 		},
 	}
 	//transaction
 	trans := &tx.Transaction{
 		TxType:         tx.BookKeeping,
-		PayloadVersion: payload.BookKeepingPayloadVersion,
-		Payload: &payload.BookKeeping{
-			Nonce: GenesisNonce,
-		},
+		PayloadVersion:  byte(0),
+		Payload:       nil,
 		Attributes:    []*tx.TxAttribute{},
 		UTXOInputs:    []*tx.UTXOTxInput{},
 		BalanceInputs: []*tx.BalanceTxInput{},
