@@ -11,6 +11,7 @@ import (
 	. "DNA/errors"
 	"fmt"
 	"sync"
+	"DNA/events"
 )
 
 type TXNPool struct {
@@ -19,6 +20,8 @@ type TXNPool struct {
 	txnList       map[common.Uint256]*transaction.Transaction // transaction which have been verifyed will put into this map
 	issueSummary  map[common.Uint256]common.Fixed64           // transaction which pass the verify will summary the amout to this map
 	inputUTXOList map[string]*transaction.Transaction         // transaction which pass the verify will add the UTXO to this map
+
+	blockPersistCompletedSubscriber events.Subscriber
 }
 
 func (this *TXNPool) init() {
@@ -28,6 +31,23 @@ func (this *TXNPool) init() {
 	this.inputUTXOList = make(map[string]*transaction.Transaction)
 	this.issueSummary = make(map[common.Uint256]common.Fixed64)
 	this.txnList = make(map[common.Uint256]*transaction.Transaction)
+
+	this.blockPersistCompletedSubscriber = ledger.DefaultLedger.Blockchain.BCEvents.Subscribe(events.EventBlockPersistCompleted, this.blockPersistCompleted)
+}
+
+func (this *TXNPool)blockPersistCompleted(v interface{}) {
+	if block, ok := v.(*ledger.Block); ok {
+		log.Infof("persist block: %x", block.Hash())
+		err := this.CleanSubmittedTransactions(block)
+		if err != nil {
+			log.Warn(err)
+		}
+
+	}
+
+	log.Info("cleaned persisted transaction in txpool, tx in pool:", this.GetTransactionCount())
+
+
 }
 
 //append transaction to txnpool when check ok.

@@ -5,11 +5,13 @@ import (
 	"DNA/common/log"
 	"DNA/core/ledger"
 	"DNA/events"
+	tx "DNA/core/transaction"
 	. "DNA/net/protocol"
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	dnaError "DNA/errors"
 )
 
 type blockReq struct {
@@ -24,6 +26,28 @@ type block struct {
 	//event *events.Event
 }
 
+func GetUnverifiedTxs(node Noder, txs []*tx.Transaction) []*tx.Transaction {
+	txpool := node.GetTxnPool(false)
+	var ret []*tx.Transaction
+	for _, t := range txs {
+		if _, ok := txpool[t.Hash()]; !ok {
+			if t.TxType != tx.BookKeeping {
+				ret = append(ret, t)
+			}
+		}
+	}
+	return ret
+}
+
+func VerifyTxs(node Noder, txs []*tx.Transaction) error {
+	for _, t := range txs {
+		if errCode := node.AppendTxnPool(t); errCode != dnaError.ErrNoError {
+			return errors.New("VerifyTxs failed when AppendTxnPool.")
+		}
+	}
+	return nil
+}
+
 func (msg block) Handle(node Noder) error {
 	log.Debug("RX block message")
 	hash := msg.blk.Hash()
@@ -32,6 +56,15 @@ func (msg block) Handle(node Noder) error {
 		log.Debug("Receive ", ReceiveDuplicateBlockCnt, " duplicated block.")
 		return nil
 	}
+
+	// add to txpool
+	log.Error("add sync block tx to pool")
+	unverifyed := GetUnverifiedTxs(node.LocalNode(), msg.blk.Transactions)
+	if err := VerifyTxs(node.LocalNode(), unverifyed); err != nil {
+		log.Warn("transaction in sync block can not added to txpool", err)
+		return err
+	}
+
 	if err := ledger.DefaultLedger.Blockchain.AddBlock(&msg.blk); err != nil {
 		log.Warn("Block add failed: ", err, " ,block hash is ", hash)
 		return err
